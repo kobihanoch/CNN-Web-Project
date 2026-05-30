@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>מודל CNN לזיהוי צורות</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>מודל CNN לזיהוי עיגול, ריבוע ומשולש</h1>
+      <p>ציור, אימון, בדיקה ושמירת משקלים ב-LocalStorage, הכל ב-JavaScript נקי.</p>
+    </div>
+    <nav>
+      <a class="nav-link" href="index.html">מילון</a>
+      <a class="nav-link active" href="model.html">דף המודל</a>
+    </nav>
+  </header>
+
+  <main class="page model-page">
+    <section class="workspace">
+      <div class="drawing-panel">
+        <div class="panel-head">
+          <h2>עורך ציור</h2>
+          <span id="sampleCount">דוגמאות משתמש: 0</span>
+        </div>
+        <canvas id="drawCanvas" width="280" height="280" aria-label="משטח ציור"></canvas>
+        <div class="button-row">
+          <button id="clearCanvasBtn" type="button">נקה ציור</button>
+          <button id="predictBtn" type="button">בדיקה / ניבוי</button>
+        </div>
+        <div class="label-row">
+          <label for="labelSelect">תיוג הדוגמה:</label>
+          <select id="labelSelect">
+            <option value="circle">עיגול</option>
+            <option value="square">ריבוע</option>
+            <option value="triangle">משולש</option>
+          </select>
+          <button id="addSampleBtn" type="button">הוסף לאימון</button>
+        </div>
+      </div>
+
+      <div class="controls-panel">
+        <div class="panel-head">
+          <h2>שליטה במודל</h2>
+          <span id="modelStatus">נטען מודל...</span>
+        </div>
+
+        <div class="control-grid">
+          <label>
+            שכבות Convolution
+            <input id="layerCount" type="number" min="1" max="3" value="2">
+          </label>
+          <label>
+            פילטרים בכל שכבה
+            <input id="filterCount" type="number" min="2" max="8" value="4">
+          </label>
+          <label>
+            גודל פילטר
+            <select id="filterSize">
+              <option value="3">3x3</option>
+              <option value="5">5x5</option>
+            </select>
+          </label>
+          <label>
+            נוירונים בשכבה צפופה
+            <input id="hiddenNeurons" type="number" min="4" max="24" value="12">
+          </label>
+          <label>
+            קצב למידה
+            <input id="learningRate" type="number" min="0.001" max="0.2" step="0.001" value="0.025">
+          </label>
+          <label>
+            Epochs
+            <input id="epochs" type="number" min="1" max="200" value="30">
+          </label>
+        </div>
+
+        <div class="button-row">
+          <button id="buildBtn" type="button">קבע פרמטרים</button>
+          <button id="trainBtn" type="button">אימון</button>
+          <button id="resetBtn" type="button">אתחול</button>
+        </div>
+
+        <div class="button-row">
+          <button id="exportJsonBtn" type="button">ייצוא משקלים JSON</button>
+          <button id="exportJsBtn" type="button">ייצוא משקלים JS</button>
+          <label class="file-label" for="importModelInput">ייבוא משקלים</label>
+          <input id="importModelInput" class="hidden-file" type="file" accept=".json,.js,application/json">
+        </div>
+
+        <div class="metrics">
+          <div><strong>Loss:</strong> <span id="lossValue">-</span></div>
+          <div><strong>Accuracy:</strong> <span id="accuracyValue">-</span></div>
+          <div><strong>איטרציות אימון:</strong> <span id="trainRuns">0</span></div>
+        </div>
+
+        <p class="active-config" id="activeConfig">
+          הפרמטרים הפעילים יוצגו אחרי טעינת המודל.
+        </p>
+      </div>
+    </section>
+
+    <section class="results-band">
+      <div>
+        <h2>תוצאת ניבוי</h2>
+        <p id="predictionText">ציירו צורה ולחצו על בדיקה / ניבוי.</p>
+      </div>
+      <div class="probabilities">
+        <div><span>עיגול</span><progress id="probCircle" value="0" max="1"></progress><b id="probCircleText">0%</b></div>
+        <div><span>ריבוע</span><progress id="probSquare" value="0" max="1"></progress><b id="probSquareText">0%</b></div>
+        <div><span>משולש</span><progress id="probTriangle" value="0" max="1"></progress><b id="probTriangleText">0%</b></div>
+      </div>
+    </section>
+
+    <section class="explain-band">
+      <h2>מה קורה בזמן האימון?</h2>
+      <p>
+        התמונה מוקטנת ל-16x16 פיקסלים. שכבות ה-Convolution מפעילות פילטרים נלמדים על התמונה,
+        ReLU משאיר ערכים חיוביים, Average Pooling מסכם את מפות התכונות, ושכבה צפופה מחזירה הסתברות
+        לשלוש המחלקות. ב-Backpropagation מתעדכנים גם פילטרי ה-Convolution וגם משקלי השכבות הצפופות לפי ה-Loss וקצב הלמידה.
+      </p>
+    </section>
+  </main>
+
+  <script src="trained-model.js"></script>
+  <script src="cnn.js"></script>
+</body>
+</html>

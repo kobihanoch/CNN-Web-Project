@@ -1,49 +1,39 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="he" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>מילון מושגי CNN</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <header class="topbar">
-    <div>
-      <h1>מילון מושגים למודל CNN</h1>
-      <p>דף הבית של התרגיל: מילון קבוע של מושגים שמופיעים בקוד, באימון ובתצוגת המודל.</p>
-    </div>
-    <nav>
-      <a class="nav-link active" href="index.html">מילון</a>
-      <a class="nav-link" href="model.html">דף המודל</a>
-    </nav>
-  </header>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>מילון מושגי CNN</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>מילון מושגים למודל CNN</h1>
+        <p>
+          דף הבית של התרגיל: מילון קבוע של מושגים שמופיעים בקוד, באימון ובתצוגת
+          המודל.
+        </p>
+      </div>
+      <nav>
+        <a class="nav-link active" href="index.html">מילון</a>
+        <a class="nav-link" href="model.html">דף המודל</a>
+      </nav>
+    </header>
 
-  <main class="page dictionary-page">
-    <section class="intro-band">
-      <h2>מה נבנה בעבודה?</h2>
-      <p>
-        הפרויקט כולל מודל CNN בצד הלקוח בלבד, ללא ספריות חיצוניות. המודל מזהה שלוש צורות:
-        עיגול, ריבוע ומשולש. ניתן לאמן אותו, לבדוק ניבוי, לאתחל משקלים ולשמור את המשקלים
-        ב-LocalStorage של הדפדפן.
-      </p>
-    </section>
+    <main class="page dictionary-page">
+      <section class="intro-band">
+        <h2>מה נבנה בעבודה?</h2>
+        <p>
+          הפרויקט כולל מודל CNN בצד הלקוח בלבד, ללא ספריות חיצוניות. המודל מזהה
+          שלוש צורות: עיגול, ריבוע ומשולש. ניתן לאמן אותו, לבדוק ניבוי, לאתחל
+          משקלים ולשמור את המשקלים ב-LocalStorage של הדפדפן.
+        </p>
+      </section>
 
-    <section class="requirements-band">
-      <h2>בדיקת דרישות המטלה</h2>
-      <ul>
-        <li>שני דפי HTML נפרדים: מילון ודף מודל.</li>
-        <li>JavaScript ו-CSS בקבצים נפרדים, ללא ספריות חיצוניות.</li>
-        <li>Canvas לציור עיגול, ריבוע ומשולש בלבד.</li>
-        <li>כפתורי אימון, בדיקה / ניבוי, אתחול ושמירת משקלים ב-LocalStorage.</li>
-        <li>שליטה בשכבות, פילטרים, גודל פילטר, נוירונים, קצב למידה ו-Epochs.</li>
-        <li>קובץ trained-model.js כולל משקלים מאומנים שנטענים לדפדפן ונשמרים ב-LocalStorage.</li>
-        <li>המילון כולל 48 מושגים על CNN, אימון, Backpropagation, משקלים ומונחי תצוגה.</li>
-      </ul>
-    </section>
+      <section class="dictionary-grid" id="dictionaryGrid"></section>
+    </main>
 
-    <section class="dictionary-grid" id="dictionaryGrid"></section>
-  </main>
-
-  <script src="glossary.js"></script>
-</body>
+    <script src="glossary.js"></script>
+  </body>
 </html>

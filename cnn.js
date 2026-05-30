@@ -8,35 +8,64 @@ const STORAGE_KEY = "cnnShapesModelV3";
 const SAMPLES_KEY = "cnnShapesSamplesV2";
 const PRETRAINED_KEY = "cnnShapesPretrainedV3";
 const INPUT_SIZE = 16;
+const CLASS_COUNT = LABELS.length;
 
 let model;
 let samples = [];
 let drawing = false;
 
-const canvas = document.getElementById("drawCanvas");
+function el(id) {
+  return document.getElementById(id);
+}
+
+function dot(weights, values, bias) {
+  let sum = bias;
+  for (let i = 0; i < weights.length; i++) {
+    sum += weights[i] * values[i];
+  }
+  return sum;
+}
+
+function copyRows(rows) {
+  const copy = [];
+  for (let i = 0; i < rows.length; i++) {
+    copy.push(rows[i].slice());
+  }
+  return copy;
+}
+
+function bestIndex(values) {
+  let best = 0;
+  for (let i = 1; i < values.length; i++) {
+    if (values[i] > values[best]) best = i;
+  }
+  return best;
+}
+
+const canvas = el("drawCanvas");
 const ctx = canvas.getContext("2d");
-const statusText = document.getElementById("modelStatus");
-const sampleCount = document.getElementById("sampleCount");
-const predictionText = document.getElementById("predictionText");
-const lossValue = document.getElementById("lossValue");
-const accuracyValue = document.getElementById("accuracyValue");
-const trainRunsValue = document.getElementById("trainRuns");
-const activeConfigText = document.getElementById("activeConfig");
+const statusText = el("modelStatus");
+const sampleCount = el("sampleCount");
+const predictionText = el("predictionText");
+const lossValue = el("lossValue");
+const accuracyValue = el("accuracyValue");
+const trainRunsValue = el("trainRuns");
+const activeConfigText = el("activeConfig");
 
 const inputs = {
-  layers: document.getElementById("layerCount"),
-  filters: document.getElementById("filterCount"),
-  filterSize: document.getElementById("filterSize"),
-  neurons: document.getElementById("hiddenNeurons"),
-  lr: document.getElementById("learningRate"),
-  epochs: document.getElementById("epochs"),
-  label: document.getElementById("labelSelect")
+  layers: el("layerCount"),
+  filters: el("filterCount"),
+  filterSize: el("filterSize"),
+  neurons: el("hiddenNeurons"),
+  lr: el("learningRate"),
+  epochs: el("epochs"),
+  label: el("labelSelect")
 };
 
 const bars = {
-  circle: [document.getElementById("probCircle"), document.getElementById("probCircleText")],
-  square: [document.getElementById("probSquare"), document.getElementById("probSquareText")],
-  triangle: [document.getElementById("probTriangle"), document.getElementById("probTriangleText")]
+  circle: [el("probCircle"), el("probCircleText")],
+  square: [el("probSquare"), el("probSquareText")],
+  triangle: [el("probTriangle"), el("probTriangleText")]
 };
 
 function readConfig() {
@@ -60,8 +89,11 @@ function randomWeight(scale) {
 
 function createKernel(size, layer, filter) {
   const mid = Math.floor(size / 2);
-  return Array.from({ length: size }, (_, y) => {
-    return Array.from({ length: size }, (_, x) => {
+  const kernel = [];
+
+  for (let y = 0; y < size; y++) {
+    const row = [];
+    for (let x = 0; x < size; x++) {
       let value = randomWeight(0.16);
 
       if (filter % 5 === 0 && x === mid) value += 0.25;
@@ -70,25 +102,50 @@ function createKernel(size, layer, filter) {
       if (filter % 5 === 3 && x + y === size - 1) value += 0.25;
       if (filter % 5 === 4 && (x === 0 || y === 0 || x === size - 1 || y === size - 1)) value += 0.12;
 
-      return value / (layer + 1);
-    });
-  });
+      row.push(value / (layer + 1));
+    }
+    kernel.push(row);
+  }
+
+  return kernel;
 }
 
 function createModel(config) {
   const convFeatures = featureCount(config);
+  const convKernels = [];
+  const convBiases = [];
+  const hiddenWeights = [];
+  const weights = [];
+
+  for (let layer = 0; layer < config.layers; layer++) {
+    const layerKernels = [];
+    for (let filter = 0; filter < config.filters; filter++) {
+      layerKernels.push(createKernel(config.filterSize, layer, filter));
+    }
+    convKernels.push(layerKernels);
+    convBiases.push(Array(config.filters).fill(0));
+  }
+
+  for (let neuron = 0; neuron < config.neurons; neuron++) {
+    const row = [];
+    for (let i = 0; i < convFeatures; i++) row.push(randomWeight(0.24));
+    hiddenWeights.push(row);
+  }
+
+  for (let label = 0; label < CLASS_COUNT; label++) {
+    const row = [];
+    for (let i = 0; i < config.neurons; i++) row.push(randomWeight(0.24));
+    weights.push(row);
+  }
+
   return {
     version: 3,
     config,
-    convKernels: Array.from({ length: config.layers }, (_, layer) => {
-      return Array.from({ length: config.filters }, (_, filter) => createKernel(config.filterSize, layer, filter));
-    }),
-    convBiases: Array.from({ length: config.layers }, () => Array(config.filters).fill(0)),
-    hiddenWeights: Array.from({ length: config.neurons }, () => {
-      return Array.from({ length: convFeatures }, () => randomWeight(0.24));
-    }),
+    convKernels,
+    convBiases,
+    hiddenWeights,
     hiddenBiases: Array(config.neurons).fill(0),
-    weights: LABELS.map(() => Array.from({ length: config.neurons }, () => randomWeight(0.24))),
+    weights,
     biases: [0, 0, 0]
   };
 }
@@ -215,6 +272,7 @@ function runConvolution(image, kernel, bias) {
 function forwardPass(image) {
   const convFeatures = [];
   const convCache = [];
+
   for (let layer = 0; layer < model.config.layers; layer++) {
     for (let filter = 0; filter < model.config.filters; filter++) {
       const result = runConvolution(
@@ -227,13 +285,18 @@ function forwardPass(image) {
     }
   }
 
-  const hiddenRaw = model.hiddenWeights.map((weights, neuron) => {
-    return weights.reduce((sum, weight, i) => sum + weight * convFeatures[i], model.hiddenBiases[neuron]);
-  });
-  const hidden = hiddenRaw.map((value) => Math.max(0, value));
-  const scores = model.weights.map((weights, label) => {
-    return weights.reduce((sum, weight, i) => sum + weight * hidden[i], model.biases[label]);
-  });
+  const hiddenRaw = [];
+  const hidden = [];
+  for (let neuron = 0; neuron < model.config.neurons; neuron++) {
+    const raw = dot(model.hiddenWeights[neuron], convFeatures, model.hiddenBiases[neuron]);
+    hiddenRaw.push(raw);
+    hidden.push(Math.max(0, raw));
+  }
+
+  const scores = [];
+  for (let label = 0; label < CLASS_COUNT; label++) {
+    scores.push(dot(model.weights[label], hidden, model.biases[label]));
+  }
 
   return {
     image,
@@ -246,10 +309,21 @@ function forwardPass(image) {
 }
 
 function softmax(scores) {
-  const max = Math.max(...scores);
-  const exps = scores.map((score) => Math.exp(score - max));
-  const sum = exps.reduce((a, b) => a + b, 0);
-  return exps.map((value) => value / sum);
+  const max = scores[bestIndex(scores)];
+  const exps = [];
+  let sum = 0;
+
+  for (let i = 0; i < scores.length; i++) {
+    const value = Math.exp(scores[i] - max);
+    exps.push(value);
+    sum += value;
+  }
+
+  for (let i = 0; i < exps.length; i++) {
+    exps[i] = exps[i] / sum;
+  }
+
+  return exps;
 }
 
 function predictImage(image) {
@@ -259,30 +333,41 @@ function predictImage(image) {
 function trainSample(image, labelIndex) {
   const result = forwardPass(image);
   const target = [0, 0, 0];
-  target[labelIndex] = 1;
-  const outputErrors = result.probabilities.map((probability, label) => probability - target[label]);
-  const oldOutputWeights = model.weights.map((weights) => weights.slice());
-  const oldHiddenWeights = model.hiddenWeights.map((weights) => weights.slice());
+  const outputErrors = [];
+  const hiddenErrors = [];
+  const convFeatureErrors = [];
 
-  for (let label = 0; label < LABELS.length; label++) {
+  target[labelIndex] = 1;
+
+  for (let label = 0; label < CLASS_COUNT; label++) {
+    outputErrors.push(result.probabilities[label] - target[label]);
+  }
+
+  const oldOutputWeights = copyRows(model.weights);
+  const oldHiddenWeights = copyRows(model.hiddenWeights);
+
+  for (let label = 0; label < CLASS_COUNT; label++) {
     for (let i = 0; i < result.hidden.length; i++) {
       model.weights[label][i] -= model.config.learningRate * outputErrors[label] * result.hidden[i];
     }
     model.biases[label] -= model.config.learningRate * outputErrors[label];
   }
 
-  const hiddenErrors = result.hidden.map((_, neuron) => {
-    const error = outputErrors.reduce((sum, outputError, label) => {
-      return sum + outputError * oldOutputWeights[label][neuron];
-    }, 0);
-    return result.hiddenRaw[neuron] > 0 ? error : 0;
-  });
+  for (let neuron = 0; neuron < result.hidden.length; neuron++) {
+    let error = 0;
+    for (let label = 0; label < CLASS_COUNT; label++) {
+      error += outputErrors[label] * oldOutputWeights[label][neuron];
+    }
+    hiddenErrors.push(result.hiddenRaw[neuron] > 0 ? error : 0);
+  }
 
-  const convFeatureErrors = result.convFeatures.map((_, feature) => {
-    return hiddenErrors.reduce((sum, hiddenError, neuron) => {
-      return sum + hiddenError * oldHiddenWeights[neuron][feature];
-    }, 0);
-  });
+  for (let feature = 0; feature < result.convFeatures.length; feature++) {
+    let error = 0;
+    for (let neuron = 0; neuron < hiddenErrors.length; neuron++) {
+      error += hiddenErrors[neuron] * oldHiddenWeights[neuron][feature];
+    }
+    convFeatureErrors.push(error);
+  }
 
   for (let neuron = 0; neuron < model.config.neurons; neuron++) {
     for (let feature = 0; feature < result.convFeatures.length; feature++) {
@@ -292,7 +377,8 @@ function trainSample(image, labelIndex) {
   }
 
   const pixelCount = INPUT_SIZE * INPUT_SIZE;
-  result.convCache.forEach((cache, featureIndex) => {
+  for (let featureIndex = 0; featureIndex < result.convCache.length; featureIndex++) {
+    const cache = result.convCache[featureIndex];
     const kernel = model.convKernels[cache.layer][cache.filter];
     const size = kernel.length;
     const pad = Math.floor(size / 2);
@@ -316,9 +402,9 @@ function trainSample(image, labelIndex) {
     }
 
     model.convBiases[cache.layer][cache.filter] -= model.config.learningRate * biasGradient;
-  });
+  }
 
-  const guess = result.probabilities.indexOf(Math.max(...result.probabilities));
+  const guess = bestIndex(result.probabilities);
   return {
     loss: -Math.log(result.probabilities[labelIndex] + 0.000001),
     correct: guess === labelIndex
@@ -326,12 +412,13 @@ function trainSample(image, labelIndex) {
 }
 
 function syntheticShape(labelIndex) {
-  const image = Array.from({ length: INPUT_SIZE }, () => Array(INPUT_SIZE).fill(0));
+  const image = [];
   const cx = 7.5 + (Math.random() - 0.5) * 2;
   const cy = 7.5 + (Math.random() - 0.5) * 2;
   const r = 4.5 + Math.random();
 
   for (let y = 0; y < INPUT_SIZE; y++) {
+    const row = [];
     for (let x = 0; x < INPUT_SIZE; x++) {
       const dx = x - cx;
       const dy = y - cy;
@@ -348,8 +435,9 @@ function syntheticShape(labelIndex) {
         onShape = line1 || line2;
       }
 
-      image[y][x] = onShape ? 1 : Math.random() < 0.01 ? 0.6 : 0;
+      row.push(onShape ? 1 : Math.random() < 0.01 ? 0.6 : 0);
     }
+    image.push(row);
   }
 
   return { image, labelIndex };
@@ -357,10 +445,15 @@ function syntheticShape(labelIndex) {
 
 function trainingSet() {
   const set = [];
-  for (let label = 0; label < LABELS.length; label++) {
+
+  for (let label = 0; label < CLASS_COUNT; label++) {
     for (let i = 0; i < 22; i++) set.push(syntheticShape(label));
   }
-  samples.forEach((sample) => set.push(sample));
+
+  for (let i = 0; i < samples.length; i++) {
+    set.push(samples[i]);
+  }
+
   return set.sort(() => Math.random() - 0.5);
 }
 
@@ -372,11 +465,12 @@ async function trainModel(epochs) {
     let loss = 0;
     let correct = 0;
 
-    set.forEach((sample) => {
+    for (let i = 0; i < set.length; i++) {
+      const sample = set[i];
       const result = trainSample(sample.image, sample.labelIndex);
       loss += result.loss;
       if (result.correct) correct++;
-    });
+    }
 
     lossValue.textContent = (loss / set.length).toFixed(3);
     accuracyValue.textContent = `${Math.round(correct / set.length * 100)}%`;
@@ -390,20 +484,26 @@ async function trainModel(epochs) {
 }
 
 function showPrediction(probabilities) {
-  let best = 0;
-  probabilities.forEach((value, index) => {
-    if (value > probabilities[best]) best = index;
-  });
+  const best = bestIndex(probabilities);
 
   predictionText.textContent = `המודל מזהה: ${LABELS[best].name} (${Math.round(probabilities[best] * 100)}%)`;
-  LABELS.forEach((label, index) => {
+  for (let index = 0; index < CLASS_COUNT; index++) {
+    const label = LABELS[index];
     bars[label.id][0].value = probabilities[index];
     bars[label.id][1].textContent = `${Math.round(probabilities[index] * 100)}%`;
-  });
+  }
 }
 
 function addSample() {
-  const labelIndex = LABELS.findIndex((label) => label.id === inputs.label.value);
+  let labelIndex = -1;
+
+  for (let i = 0; i < CLASS_COUNT; i++) {
+    if (LABELS[i].id === inputs.label.value) {
+      labelIndex = i;
+      break;
+    }
+  }
+
   samples.push({ image: canvasToInput(), labelIndex });
   saveSamples();
   statusText.textContent = "דוגמה נוספה לאימון";
@@ -520,14 +620,14 @@ canvas.addEventListener("touchstart", startDraw, { passive: false });
 canvas.addEventListener("touchmove", draw, { passive: false });
 canvas.addEventListener("touchend", stopDraw);
 
-document.getElementById("clearCanvasBtn").addEventListener("click", clearCanvas);
-document.getElementById("predictBtn").addEventListener("click", () => showPrediction(predictImage(canvasToInput()).probabilities));
-document.getElementById("addSampleBtn").addEventListener("click", addSample);
-document.getElementById("buildBtn").addEventListener("click", buildNewModel);
-document.getElementById("trainBtn").addEventListener("click", () => trainModel(Number(inputs.epochs.value)));
-document.getElementById("resetBtn").addEventListener("click", resetAll);
-document.getElementById("exportJsonBtn").addEventListener("click", exportJson);
-document.getElementById("exportJsBtn").addEventListener("click", exportJs);
-document.getElementById("importModelInput").addEventListener("change", importFile);
+el("clearCanvasBtn").addEventListener("click", clearCanvas);
+el("predictBtn").addEventListener("click", () => showPrediction(predictImage(canvasToInput()).probabilities));
+el("addSampleBtn").addEventListener("click", addSample);
+el("buildBtn").addEventListener("click", buildNewModel);
+el("trainBtn").addEventListener("click", () => trainModel(Number(inputs.epochs.value)));
+el("resetBtn").addEventListener("click", resetAll);
+el("exportJsonBtn").addEventListener("click", exportJson);
+el("exportJsBtn").addEventListener("click", exportJs);
+el("importModelInput").addEventListener("change", importFile);
 
 init();
